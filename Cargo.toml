@@ -1,0 +1,13 @@
+[package]
+name = "onehot_dna"
+version = "0.1.0"
+edition = "2021"
+description = "Small fixed-length one-hot DNA encoding for barcode matching and correction"
+license = "MIT OR Apache-2.0"
+repository = ""
+
+[lib]
+name = "onehot_dna"
+path = "src/lib.rs"
+
+[dependencies]
