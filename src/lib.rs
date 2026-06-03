@@ -132,18 +132,7 @@ impl<const N: usize> OneHot<N> {
     /// encoded as zero, unknown bases match nothing and count as mismatches.
     #[inline]
     pub fn mismatches(self, other: Self) -> u32 {
-        let mut n = 0;
-
-        for i in 0..N {
-            let a = (self.bits >> (i * 4)) & 0b1111;
-            let b = (other.bits >> (i * 4)) & 0b1111;
-
-            if (a & b) == 0 {
-                n += 1;
-            }
-        }
-
-        n
+        (self.bits ^ other.bits).count_ones().div_ceil(2)
     }
 
     /// Exact bit equality.
@@ -158,14 +147,6 @@ impl<const N: usize> OneHot<N> {
         self.mismatches(other) <= max_mismatches
     }
 
-    /// Fast strict Hamming distance for clean A/C/G/T-only sequences.
-    ///
-    /// Do not use this when either side may contain unknown bases encoded as zero.
-    /// For barcode correction, prefer [`Self::mismatches`].
-    #[inline]
-    pub fn strict_acgt_hamming(self, other: Self) -> u32 {
-        (self.bits ^ other.bits).count_ones() / 2
-    }
 }
 
 impl OneHot9 {

@@ -23,7 +23,7 @@ Or from a local workspace:
 
 ```toml
 [dependencies]
-onehot_dna = { path = "../onehot_dna" }
+onehot_dna = { git = "https://github.com/stela2502/onehot_dna" }
 ```
 
 ## Quick Start
