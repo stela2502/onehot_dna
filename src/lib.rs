@@ -200,7 +200,7 @@ const fn decode_nibble(nibble: u8) -> u8 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OneHotSet<const N: usize> {
     data: Vec<OneHot<N>>,
 }
