@@ -5,7 +5,7 @@ edition = "2021"
 
 authors = ["Stefan Lang"]
 description = "Fixed-length one-hot DNA encoding for barcode matching and correction"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 
 repository = "https://github.com/stela2502/onehot_dna"
 homepage = "https://github.com/stela2502/onehot_dna"
