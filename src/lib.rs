@@ -54,6 +54,7 @@ pub struct OneHot<const N: usize> {
 pub type OneHot9 = OneHot<9>;
 
 impl<const N: usize> OneHot<N> {
+
     /// Maximum supported length for this implementation.
     pub const MAX_LEN: usize = 32;
 
@@ -149,34 +150,6 @@ impl<const N: usize> OneHot<N> {
 
 }
 
-impl OneHot9 {
-    /// Find the unique best match against a 9 bp candidate table.
-    ///
-    /// Returns `(index, distance)` if the best match is unique and within
-    /// `max_mismatches`. Returns `None` for no hit or ties.
-    pub fn best_match(self, candidates: &[OneHot9], max_mismatches: u32) -> Option<(usize, u32)> {
-        let mut best_index = None;
-        let mut best_dist = max_mismatches + 1;
-        let mut ties = 0u32;
-
-        for (i, candidate) in candidates.iter().copied().enumerate() {
-            let d = self.mismatches(candidate);
-
-            if d < best_dist {
-                best_index = Some(i);
-                best_dist = d;
-                ties = 1;
-            } else if d == best_dist {
-                ties += 1;
-            }
-        }
-
-        match (best_index, best_dist <= max_mismatches, ties == 1) {
-            (Some(i), true, true) => Some((i, best_dist)),
-            _ => None,
-        }
-    }
-}
 
 impl<const N: usize> fmt::Debug for OneHot<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -206,7 +179,7 @@ impl<const N: usize> FromStr for OneHot<N> {
 ///
 /// Unknown/non-ACGT bases are encoded as zero.
 #[inline]
-pub const fn encode_base(base: u8) -> u128 {
+const fn encode_base(base: u8) -> u128 {
     match base {
         b'A' | b'a' => 0b0001,
         b'C' | b'c' => 0b0010,
@@ -227,12 +200,88 @@ const fn decode_nibble(nibble: u8) -> u8 {
     }
 }
 
-/// Encode many same-length candidate sequences.
-pub fn encode_candidates<const N: usize, S: AsRef<[u8]>>(
-    seqs: &[S],
-) -> Result<Vec<OneHot<N>>, OneHotError> {
-    seqs.iter().map(|s| OneHot::<N>::from_bytes(s.as_ref())).collect()
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OneHotSet<const N: usize> {
+    data: Vec<OneHot<N>>,
 }
+
+impl<const N: usize> OneHotSet<N> {
+    pub fn from_sequences<S: AsRef<[u8]>>(
+        seqs: &[S],
+    ) -> Result<Self, OneHotError> {
+        let data = seqs
+            .iter()
+            .map(|s| OneHot::<N>::from_bytes(s.as_ref()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self { data })
+    }
+
+    pub fn min_pairwise_mismatches(&self) -> Option<usize> {
+        if self.data.len() < 2 {
+            return None;
+        }
+
+        let mut best = usize::MAX;
+
+        for i in 0..self.data.len() {
+            for j in (i + 1)..self.data.len() {
+                best = best.min(
+                    self.data[i].mismatches(self.data[j]) as usize
+                );
+            }
+        }
+
+        Some(best)
+    }
+
+    pub fn correction_radius(&self) -> Option<usize> {
+        self.min_pairwise_mismatches()
+            .map(|d| d.saturating_sub(1) / 2)
+    }
+
+    pub fn as_slice(&self) -> &[OneHot<N>] {
+        &self.data
+    }
+
+    pub fn into_vec(self) -> Vec<OneHot<N>> {
+        self.data
+    }
+
+    /// Find the unique best match against this candidate table.
+    ///
+    /// Returns `(index, distance)` if the best match is unique and within
+    /// `max_mismatches`. Returns `None` for no hit or ties.
+    pub fn best_match(
+        &self,
+        query: &OneHot<N>,
+        max_mismatches: u32,
+    ) -> Option<(usize, u32)> {
+        let mut best_index = None;
+        let mut best_dist = max_mismatches + 1;
+        let mut ties = 0u32;
+
+        for (i, candidate) in self.data.iter().copied().enumerate() {
+            let d = query.mismatches(candidate);
+
+            if d < best_dist {
+                best_index = Some(i);
+                best_dist = d;
+                ties = 1;
+            } else if d == best_dist {
+                ties += 1;
+            }
+        }
+
+        match (best_index, best_dist <= max_mismatches, ties == 1) {
+            (Some(i), true, true) => Some((i, best_dist)),
+            _ => None,
+        }
+    }
+
+}
+
+
 
 #[cfg(test)]
 mod tests {
@@ -262,7 +311,7 @@ mod tests {
 
     #[test]
     fn best_match_requires_unique_hit() {
-        let candidates = encode_candidates::<9, _>(&[
+        let candidates = OneHotSet::<9>::from_sequences(&[
             b"AAAAAAAAA".as_slice(),
             b"CCCCCCCCC".as_slice(),
             b"GGGGGGGGG".as_slice(),
@@ -270,19 +319,19 @@ mod tests {
         .unwrap();
 
         let obs = OneHot9::from_bytes(b"AAAAAAAAC").unwrap();
-        assert_eq!(obs.best_match(&candidates, 1), Some((0, 1)));
+        assert_eq!(candidates.best_match(&obs, 1), Some((0, 1)));
     }
 
     #[test]
     fn best_match_rejects_ties() {
-        let candidates = encode_candidates::<9, _>(&[
+        let candidates = OneHotSet::<9>::from_sequences(&[
             b"AAAAAAAAA".as_slice(),
             b"AAAAAAAAC".as_slice(),
         ])
         .unwrap();
 
         let obs = OneHot9::from_bytes(b"AAAAAAAAN").unwrap();
-        assert_eq!(obs.best_match(&candidates, 1), None);
+        assert_eq!(candidates.best_match(&obs, 1), None);
     }
 
     #[test]
